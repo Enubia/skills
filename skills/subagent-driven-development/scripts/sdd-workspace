@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Resolve and ensure the working-tree directory SDD uses for its short-lived
+# artifacts: task briefs (plan-file fallback), implementer reports, review
+# packages, and the progress ledger. Print the directory's absolute path.
+#
+# It lives under .scratch/ — the same scratch root the issue-tracker skills use
+# — but in its own sdd/ subfolder. .scratch/ itself is tracked (issue files are
+# committed), so a self-ignoring .gitignore keeps SDD's transient run artifacts
+# out of `git status` and out of accidental commits without touching any
+# tracked file. It is not under .git/ because Claude Code treats .git/ as a
+# protected path and denies agent writes there — which would block an
+# implementer subagent from writing its report file.
+#
+# Single source of truth for the workspace location, so task-brief and
+# review-package cannot drift to different directories.
+#
+# Usage: sdd-workspace
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+dir="$root/.scratch/sdd"
+mkdir -p "$dir"
+printf '*\n' > "$dir/.gitignore"
+cd "$dir" && pwd
