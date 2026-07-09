@@ -4,9 +4,13 @@ Agent skills for [Claude Code](https://claude.com/claude-code). Each skill lives
 
 ## Skills
 
+### [`quality-review`](skills/quality-review/SKILL.md)
+
+A user-invoked thermonuclear maintainability review for structural simplicity, abstraction quality, file-size growth, and spaghetti branching. It produces a single-file HTML report with a clear approval call and the highest-leverage fix.
+
 ### [`subagent-driven-development`](skills/subagent-driven-development/SKILL.md)
 
-An in-session execution engine for a plan or a set of agent-ready issues. It dispatches a **fresh implementer subagent per task** (building test-first via `tdd`), runs a **spec + quality review** after each task, then a **whole-branch review** before merge — all without leaving the current session.
+An in-session execution engine for a plan or a set of agent-ready issues. It dispatches a **fresh implementer subagent per task** (building test-first via `tdd`), runs the canonical **code-review Standards/Spec axes** after each task, then a **whole-branch review** before merge — all without leaving the current session.
 
 Each subagent gets an isolated, hand-crafted context instead of inheriting the session history, which keeps them focused and preserves the controller's context for coordination. Reports and review packages are handed over as files (under self-ignored `.scratch/sdd/`) rather than pasted into context, and a durable progress ledger survives compaction so completed tasks are never re-run.
 

@@ -1,15 +1,15 @@
 ---
 name: subagent-driven-development
-description: Execute a plan or agent-ready issues by dispatching a fresh implementer subagent per task, reviewing each (spec + quality), then a whole-branch review. Use when executing an implementation plan or the issues under a .scratch/ ticket directory whose tasks are mostly independent, in the current session (not a parallel/background session).
+description: Execute a plan or agent-ready issues by dispatching a fresh implementer subagent per task, reviewing each with the canonical code-review Standards/Spec axes, then a whole-branch review. Use when executing an implementation plan or the issues under a .scratch/ ticket directory whose tasks are mostly independent, in the current session (not a parallel/background session).
 ---
 
 # Subagent-Driven Development
 
-Execute a plan by dispatching a fresh implementer subagent per task, a task review (spec compliance + code quality) after each, and a broad whole-branch review at the end.
+Execute a plan by dispatching a fresh implementer subagent per task, a task review using the canonical `code-review` Standards/Spec axes after each, and a broad whole-branch review at the end.
 
 **Why subagents:** You delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they stay focused and succeed at their task. They should never inherit your session's context or history — you construct exactly what they need. This also preserves your own context for coordination work.
 
-**Core principle:** Fresh subagent per task + task review (spec + quality) + broad final review = high quality, fast iteration
+**Core principle:** Fresh subagent per task + canonical Standards/Spec review + broad final review = high quality, fast iteration
 
 **Narration:** between tool calls, narrate at most one short line — the ledger and the tool results carry the record.
 
@@ -52,7 +52,7 @@ digraph when_to_use {
 **Same-session subagent execution gives you:**
 - No context switch — you stay the controller
 - Fresh subagent per task (no context pollution)
-- Review after each task (spec compliance + code quality), broad review at the end
+- Review after each task (canonical Standards/Spec axes), broad review at the end
 - Faster iteration (no human-in-loop between tasks)
 
 ## Workspace & isolation
@@ -74,15 +74,15 @@ digraph process {
         "Implementer subagent asks questions?" [shape=diamond];
         "Answer questions, provide context" [shape=box];
         "Implementer subagent implements, tests, commits, self-reviews" [shape=box];
-        "Write diff file, dispatch task reviewer subagent (./task-reviewer-prompt.md)" [shape=box];
-        "Task reviewer reports spec ✅ and quality approved?" [shape=diamond];
-        "Dispatch fix subagent for Critical/Important findings" [shape=box];
+        "Write diff file, dispatch task reviewer subagent (./task-reviewer-prompt.md adapter to code-review)" [shape=box];
+        "Task reviewer reports Spec pass and Standards no blockers?" [shape=diamond];
+        "Dispatch fix subagent for task-gate blockers" [shape=box];
         "Mark task complete in todo list and progress ledger" [shape=box];
     }
 
     "Read plan/issues, note context and global constraints, create todos" [shape=box];
     "More tasks remain?" [shape=diamond];
-    "Dispatch final whole-branch reviewer (./code-reviewer.md)" [shape=box];
+    "Dispatch final whole-branch reviewer (./code-reviewer.md adapter to code-review)" [shape=box];
     "Offer quality-review for the maintainability pass" [shape=box];
     "Finish the branch (see Finishing)" [shape=box style=filled fillcolor=lightgreen];
 
@@ -91,15 +91,15 @@ digraph process {
     "Implementer subagent asks questions?" -> "Answer questions, provide context" [label="yes"];
     "Answer questions, provide context" -> "Dispatch implementer subagent (./implementer-prompt.md)";
     "Implementer subagent asks questions?" -> "Implementer subagent implements, tests, commits, self-reviews" [label="no"];
-    "Implementer subagent implements, tests, commits, self-reviews" -> "Write diff file, dispatch task reviewer subagent (./task-reviewer-prompt.md)";
-    "Write diff file, dispatch task reviewer subagent (./task-reviewer-prompt.md)" -> "Task reviewer reports spec ✅ and quality approved?";
-    "Task reviewer reports spec ✅ and quality approved?" -> "Dispatch fix subagent for Critical/Important findings" [label="no"];
-    "Dispatch fix subagent for Critical/Important findings" -> "Write diff file, dispatch task reviewer subagent (./task-reviewer-prompt.md)" [label="re-review"];
-    "Task reviewer reports spec ✅ and quality approved?" -> "Mark task complete in todo list and progress ledger" [label="yes"];
+    "Implementer subagent implements, tests, commits, self-reviews" -> "Write diff file, dispatch task reviewer subagent (./task-reviewer-prompt.md adapter to code-review)";
+    "Write diff file, dispatch task reviewer subagent (./task-reviewer-prompt.md adapter to code-review)" -> "Task reviewer reports Spec pass and Standards no blockers?";
+    "Task reviewer reports Spec pass and Standards no blockers?" -> "Dispatch fix subagent for task-gate blockers" [label="no"];
+    "Dispatch fix subagent for task-gate blockers" -> "Write diff file, dispatch task reviewer subagent (./task-reviewer-prompt.md adapter to code-review)" [label="re-review"];
+    "Task reviewer reports Spec pass and Standards no blockers?" -> "Mark task complete in todo list and progress ledger" [label="yes"];
     "Mark task complete in todo list and progress ledger" -> "More tasks remain?";
     "More tasks remain?" -> "Dispatch implementer subagent (./implementer-prompt.md)" [label="yes"];
-    "More tasks remain?" -> "Dispatch final whole-branch reviewer (./code-reviewer.md)" [label="no"];
-    "Dispatch final whole-branch reviewer (./code-reviewer.md)" -> "Offer quality-review for the maintainability pass";
+    "More tasks remain?" -> "Dispatch final whole-branch reviewer (./code-reviewer.md adapter to code-review)" [label="no"];
+    "Dispatch final whole-branch reviewer (./code-reviewer.md adapter to code-review)" -> "Offer quality-review for the maintainability pass";
     "Offer quality-review for the maintainability pass" -> "Finish the branch (see Finishing)";
 }
 ```
@@ -121,6 +121,7 @@ You construct each subagent's prompt, so you decide which skills it invokes. Wir
 - **`diagnosing-bugs`** — when an implementer or fix subagent hits a hard bug it cannot crack by inspection (a failing test it doesn't understand, a regression), instruct it to run the `diagnosing-bugs` loop rather than guess-patching.
 - **`codebase-design`** — for a task that turns on a real design decision (where a seam goes, an interface shape), hand the implementer the deep-module vocabulary so its choice and the reviewer's judgement share language. A task that needs design judgement *you* haven't settled is an escalation, not an implementer call — resolve it with `grilling` first.
 - **`domain-modeling`** — reviewers and implementers should read `CONTEXT.md` (the domain glossary) and `docs/adr/` for the area they touch, and use that vocabulary. Don't re-litigate a settled ADR.
+- **`code-review`** — reviewer prompts are adapters around `~/.agents/skills/code-review/SKILL.md`. That skill is the single source of truth for the Standards/Spec review process and smell baseline; SDD supplies only task/branch scope, diff-package paths, and gate handling.
 
 ## Model Selection
 
@@ -163,19 +164,19 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 
 ## Handling Reviewer ⚠️ Items
 
-The task reviewer may report "⚠️ Cannot verify from diff" items — requirements that live in unchanged code or span tasks. These do not block the rest of the review, but you must resolve each one yourself before marking the task complete: you hold the plan and cross-task context the reviewer lacks. If you confirm an item is a real gap, treat it as a failed spec review — send it back to the implementer and re-review.
+The task reviewer's Spec axis may report "⚠️ Cannot verify from diff" items — requirements that live in unchanged code or span tasks. These do not block the rest of the review, but you must resolve each one yourself before marking the task complete: you hold the plan and cross-task context the reviewer lacks. If you confirm an item is a real gap, treat it as a failed Spec review — send it back to the implementer and re-review.
 
 ## Constructing Reviewer Prompts
 
-Per-task reviews are task-scoped gates. The broad review happens once, at the final whole-branch review. When you fill a reviewer template:
+Per-task reviews are task-scoped gates. The broad review happens once, at the final whole-branch review. Both reviewer templates are thin adapters around `~/.agents/skills/code-review/SKILL.md`; keep the Standards/Spec rubric there and let the reviewer read it from that path. When you fill a reviewer template:
 
 - Do not add open-ended directives like "check all uses" or "run race tests if useful" without a concrete, task-specific reason
 - Do not ask a reviewer to re-run tests the implementer already ran on the same code — the implementer's report carries the test evidence
 - Do not pre-judge findings for the reviewer — never instruct a reviewer to ignore or not flag a specific issue. If you believe a finding would be a false positive, let the reviewer raise it and adjudicate it in the review loop. If the prompt you are writing contains "do not flag," "don't treat X as a defect," "at most Minor," or "the plan chose" — stop: you are pre-judging, usually to spare yourself a review loop.
-- The global-constraints block you hand the reviewer is its attention lens. Copy the binding requirements verbatim from the plan's Global Constraints section or the issue: exact values, exact formats, and the stated relationships between components ("same layout as X", "matches Y"). The reviewer's template already carries the process rules (YAGNI, test hygiene, review method) — the constraints block is for what THIS project's spec demands.
+- The global-constraints block you hand the reviewer is its attention lens. Copy the binding requirements verbatim from the plan's Global Constraints section or the issue: exact values, exact formats, and the stated relationships between components ("same layout as X", "matches Y"). The canonical `code-review` skill already carries the Standards/Spec review process — the constraints block is for what THIS project's spec demands.
 - Hand the reviewer its diff as a file: run this skill's `scripts/review-package BASE HEAD` and pass the reviewer the file path it prints (or, without bash: `git log --oneline`, `git diff --stat`, and `git diff -U10` for the range, redirected to one uniquely named file). The output never enters your own context, and the reviewer sees the commit list, stat summary, and full diff with context in one Read call. Use the *recorded BASE*, never `HEAD~1`.
 - A dispatch prompt describes one task, not the session's history. Do not paste accumulated prior-task summaries ("state after Tasks 1-3") into later dispatches — a real session's dispatch hit 42k chars of which 99% was pasted history. A fresh subagent needs its task, the interfaces it touches, and the global constraints. Nothing else.
-- Dispatch fix subagents for Critical and Important findings. Record Minor findings in the progress ledger as you go, and point the final whole-branch review at that list so it can triage which must be fixed before merge. A roll-up nobody reads is a silent discard.
+- Dispatch fix subagents for task-gate blockers: Spec failures and Standards findings the reviewer says should block the task. Record non-blocking findings in the progress ledger as you go, and point the final whole-branch review at that list so it can triage which must be fixed before merge. A roll-up nobody reads is a silent discard.
 - A finding labeled plan-mandated — or any finding that conflicts with what the plan's text requires — is the human's decision, like any plan contradiction: present the finding and the plan text, ask which governs. Do not dismiss the finding because the plan mandates it, and do not dispatch a fix that contradicts the plan without asking.
 - The final whole-branch review gets a package too: run `scripts/review-package MERGE_BASE HEAD` (MERGE_BASE = the commit the branch started from, e.g. `git merge-base main HEAD`) and include the printed path in the final review dispatch, so the final reviewer reads one file instead of re-deriving the branch diff with git commands.
 - Every fix dispatch carries the implementer contract: the fix subagent re-runs the tests covering its change and reports the results. Name the covering test files in the dispatch — a one-line fix does not need the whole suite. Before re-dispatching the reviewer, confirm the fix report contains the covering tests, the command run, and the output; dispatch the re-review once all three are present.
@@ -187,7 +188,7 @@ Everything you paste into a dispatch prompt — and everything a subagent prints
 
 - **Task brief:** for an issue, the brief is the issue file itself (`.scratch/<feature>/issues/<NN>-<slug>.md`) — pass its path. For the plan-file fallback, run this skill's `scripts/task-brief PLAN_FILE N` — it extracts the task's full text to a uniquely named file and prints the path. Compose the dispatch so the brief stays the single source of requirements. Your dispatch should contain: (1) one line on where this task fits in the project; (2) the brief path, introduced as "read this first — it is your requirements, with the exact values to use verbatim"; (3) interfaces and decisions from earlier tasks that the brief cannot know; (4) your resolution of any ambiguity you noticed in the brief; (5) the report-file path and report contract. Exact values (numbers, magic strings, signatures, test cases) appear only in the brief.
 - **Report file:** name the implementer's report file in `.scratch/sdd/` after the task (e.g. `task-N-report.md`, or `<issue-slug>-report.md`) and put it in the dispatch prompt. The implementer writes the full report there and returns only status, commits, a one-line test summary, and concerns.
-- **Reviewer inputs:** the task reviewer gets three paths — the brief (issue file or extracted brief), the report file, and the review package — plus the global constraints that bind the task.
+- **Reviewer inputs:** the task reviewer gets the canonical `code-review` skill path (`~/.agents/skills/code-review/SKILL.md`), three SDD paths — the brief (issue file or extracted brief), the report file, and the review package — plus the global constraints that bind the task.
 - Fix dispatches append their fix report (with test results) to the same report file and return a short summary; re-reviews read the updated file.
 
 ## Durable Progress
@@ -204,15 +205,15 @@ Conversation memory does not survive compaction. In real sessions, controllers t
 
 After the final whole-branch review comes back clean (and any final-review fixes are merged):
 
-1. **Maintainability pass (offer):** the whole-branch reviewer checks correctness and spec compliance; it does not do the strict structural audit. Offer to run the user-invoked **`quality-review`** skill on the branch for the maintainability/code-judo pass. It produces a shareable HTML report and is the right final gate before merge on non-trivial branches.
+1. **Maintainability pass (offer):** the whole-branch reviewer runs the canonical `code-review` Standards/Spec axes; it does not do the strict structural audit. Offer to run the user-invoked **`quality-review`** skill on the branch for the maintainability/code-judo pass. It produces a shareable HTML report and is the right final gate before merge on non-trivial branches.
 2. **Integrate:** present the integration options — merge to the base branch, open a PR, or leave the branch for the user. Follow the repo's commit/PR conventions. Do not merge or push without the user's go-ahead.
 3. **Tracker:** update the executed issues' `Status:` line if the project's `triage` flow expects it, and record the final ledger line.
 
 ## Prompt Templates
 
 - [implementer-prompt.md](implementer-prompt.md) — Dispatch implementer subagent (builds test-first via `tdd`)
-- [task-reviewer-prompt.md](task-reviewer-prompt.md) — Dispatch task reviewer subagent (spec compliance + code quality)
-- [code-reviewer.md](code-reviewer.md) — Dispatch the final whole-branch correctness/spec reviewer; pair with `quality-review` for maintainability
+- [task-reviewer-prompt.md](task-reviewer-prompt.md) — Dispatch task reviewer subagent through the canonical `code-review` skill
+- [code-reviewer.md](code-reviewer.md) — Dispatch final whole-branch reviewer through the canonical `code-review` skill; pair with `quality-review` for thermonuclear maintainability
 
 ## Example Workflow
 
@@ -240,7 +241,8 @@ Implementer: "Got it. Implementing now..."
 
 [Run review-package, dispatch task reviewer with the printed path]
 Task reviewer: Spec ✅ - all requirements met, nothing extra.
-  Strengths: Good test coverage, clean. Issues: None. Task quality: Approved.
+  Standards ✅ - no documented-standard violations or blocking smells.
+  Strengths: Good test coverage, clean. Task quality: Approved.
 
 [Mark Issue 01 complete in the ledger]
 
@@ -255,20 +257,20 @@ Implementer: [No questions, proceeds]
 Task reviewer: Spec ❌:
   - Missing: Progress reporting (issue says "report every 100 items")
   - Extra: Added --json flag (not requested)
-  Issues (Important): Magic number (100)
+  Standards ❌: Magic number (Primitive Obsession baseline smell)
 
 [Dispatch fix subagent with all findings]
 Fixer: Removed --json flag, added progress reporting, extracted PROGRESS_INTERVAL
 
 [Task reviewer reviews again]
-Task reviewer: Spec ✅. Task quality: Approved.
+Task reviewer: Spec ✅. Standards ✅. Task quality: Approved.
 
 [Mark Issue 02 complete]
 
 ...
 
-[After all issues: dispatch final whole-branch code-reviewer]
-Final reviewer: All requirements met, ready to merge
+[After all issues: dispatch final whole-branch code-reviewer adapter]
+Final reviewer: Standards ✅. Spec ✅. Ready to merge.
 
 [Offer quality-review for the maintainability pass; then finish the branch]
 Done!
@@ -278,17 +280,17 @@ Done!
 
 **Never:**
 - Start implementation on main/master branch without explicit user consent
-- Skip task review, or accept a report missing either verdict (spec compliance AND task quality are both required)
+- Skip task review, or accept a report missing either axis (Spec AND Standards are both required)
 - Proceed with unfixed issues
 - Dispatch multiple implementation subagents in parallel (conflicts)
 - Make a subagent read the whole plan file (hand it its issue file or `scripts/task-brief` extract instead)
 - Skip scene-setting context (subagent needs to understand where task fits)
 - Ignore subagent questions (answer before letting them proceed)
-- Accept "close enough" on spec compliance (reviewer found spec issues = not done)
-- Skip review loops (reviewer found issues = implementer fixes = review again)
+- Accept "close enough" on spec compliance (Spec axis found issues = not done)
+- Skip review loops (reviewer found blocking issues = implementer fixes = review again)
 - Let implementer self-review replace actual review (both are needed)
 - Tell a reviewer what not to flag, or pre-rate a finding's severity in the dispatch prompt ("treat it as Minor at most")
 - Dispatch a task reviewer without a diff file — generate it first (`scripts/review-package BASE HEAD`) and name the printed path in the prompt
-- Move to next task while the review has open Critical/Important issues
+- Move to next task while the review has open task-gate blockers
 - Re-dispatch a task the progress ledger already marks complete — check the ledger (and `git log`) after any compaction or resume
 - Plan inside this skill — if the input isn't agent-ready, route to `grilling` → `to-issues`

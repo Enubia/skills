@@ -1,188 +1,107 @@
 # Task Reviewer Prompt Template
 
-Use this template when dispatching a task reviewer subagent. The reviewer
-reads the task's diff once and returns two verdicts: spec compliance and
-code quality.
+Use this template when dispatching a task reviewer subagent. The review process and rubric come from the canonical `code-review` skill at `~/.agents/skills/code-review/SKILL.md`; this file only adapts that skill to a single SDD task.
 
-**Purpose:** Verify one task's implementation matches its requirements (nothing
-more, nothing less) and is well-built (clean, tested, maintainable)
+**Purpose:** Apply the canonical two-axis review to one task's implementation: Spec says whether the task brief was implemented, Standards says whether the diff follows repo standards and the canonical smell baseline.
 
 ```
 Subagent (general-purpose):
-  description: "Review Task N (spec + quality)"
+  description: "Review Task N with code-review"
   model: [MODEL — REQUIRED: choose per SKILL.md Model Selection; an omitted
          model silently inherits the session's most expensive one]
   prompt: |
-    You are reviewing one task's implementation: first whether it matches its
-    requirements, then whether it is well-built. This is a task-scoped gate,
-    not a merge review — a broad whole-branch review happens separately after
-    all tasks are complete.
+    You are reviewing one Subagent-Driven Development task. First read
+    `~/.agents/skills/code-review/SKILL.md` (expand `~` to the user's home
+    directory). That file is the canonical review process and rubric. Apply it
+    to the task scope below, with the SDD overrides in this prompt.
 
-    ## What Was Requested
+    If the canonical skill file is missing, stop and report that the controller
+    must install or provide `~/.agents/skills/code-review/SKILL.md`. The
+    installed file is the source for the rubric.
 
-    Read the task brief: [BRIEF_FILE]
+    ## SDD Scope
+
+    Fixed point: [BASE_SHA]
+    Head: [HEAD_SHA]
+    Diff package: [DIFF_FILE]
+
+    Read the diff package once. It contains the commit list, stat summary, and
+    full diff with surrounding context for this task. Treat it as the prepared
+    output for the canonical skill's `git diff <fixed-point>...HEAD` and
+    `git log <fixed-point>..HEAD --oneline` steps. If the package is missing,
+    fall back to:
+
+    - `git log [BASE_SHA]..[HEAD_SHA] --oneline`
+    - `git diff --stat [BASE_SHA]..[HEAD_SHA]`
+    - `git diff -U10 [BASE_SHA]..[HEAD_SHA]`
+
+    Your review is read-only on this checkout. Preserve the working tree, the
+    index, HEAD, and branch state.
+
+    ## Spec Source
+
+    Task brief: [BRIEF_FILE]
 
     Global constraints from the spec/design that bind this task:
     [GLOBAL_CONSTRAINTS]
 
-    ## What the Implementer Claims They Built
+    For the canonical Spec axis, use the task brief plus these global
+    constraints as the supplied spec source. Skip issue-tracker discovery; the
+    controller has already supplied the task's requirements.
 
-    Read the implementer's report: [REPORT_FILE]
+    If a requirement cannot be verified from this task diff alone because it
+    lives in unchanged code or spans later tasks, report it as ⚠️ Cannot verify
+    from diff, with the exact check the controller should perform.
 
-    ## Diff Under Review
+    ## Implementer Claims
 
-    **Base:** [BASE_SHA]
-    **Head:** [HEAD_SHA]
-    **Diff file:** [DIFF_FILE]
+    Implementer report: [REPORT_FILE]
 
-    Read the diff file once — it contains the commit list, a stat summary,
-    and the full diff with surrounding context, and it is your view of the
-    change. The diff's context lines ARE the changed files: do not Read a
-    changed file separately unless a hunk you must judge is cut off
-    mid-function — and say so in your report. Do not re-run git commands.
-    If the diff file is missing, fetch the diff yourself:
-    `git diff --stat [BASE_SHA]..[HEAD_SHA]` and `git diff [BASE_SHA]..[HEAD_SHA]`.
-    Do not crawl the broader codebase. Inspect code outside the diff only
-    to evaluate a concrete risk you can name — one focused check per named
-    risk, and name both the risk and what you checked in your report.
-    Cross-cutting changes are legitimate named risks: if the diff changes
-    lock ordering, a function or API contract, or shared mutable state,
-    checking the call sites is the right method.
+    Read this for context and reported test evidence. Treat it as claims, not
+    proof. Verify claims against the diff. Design rationales in the report do
+    not downgrade findings.
 
-    Your review is read-only on this checkout. Do not mutate the working
-    tree, the index, HEAD, or branch state in any way.
+    ## Standards Source
 
-    ## Do Not Trust the Report
-
-    Treat the implementer's report as unverified claims about the code. It
-    may be incomplete, inaccurate, or optimistic. Verify the claims against
-    the diff. Design rationales in the report are claims too: "left it per
-    YAGNI," "kept it simple deliberately," or any other justification is the
-    implementer grading their own work. Judge the code on its merits — a
-    stated rationale never downgrades a finding's severity.
-
-    ## Tests
-
-    The implementer already ran the tests and reported results with TDD
-    evidence for exactly this code. Do not re-run the suite to confirm their
-    report. Run a test only when reading the code raises a specific doubt
-    that no existing run answers — and then a focused test, never a
-    package-wide suite, race detector run, or repeated/high-count loop. If
-    heavy validation seems warranted, recommend it in your report instead of
-    running it. If you cannot run commands in this environment, name the
-    test you would run.
-
-    Warnings or other noise in the implementer's reported test output are
-    findings — test output should be pristine.
-
-    ## Part 1: Spec Compliance
-
-    Compare the diff against What Was Requested:
-
-    - **Missing:** requirements they skipped, missed, or claimed without
-      implementing
-    - **Extra:** features that weren't requested, over-engineering, unneeded
-      "nice to haves"
-    - **Misunderstood:** right feature built the wrong way, wrong problem
-      solved
-
-    If a requirement cannot be verified from this diff alone (it lives in
-    unchanged code or spans tasks), report it as a ⚠️ item instead of
-    broadening your search.
-
-    ## Part 2: Code Quality
-
-    **Code quality:**
-    - Clean separation of concerns?
-    - Proper error handling?
-    - DRY without premature abstraction?
-    - Edge cases handled?
-
-    **Tests:**
-    - Do the new and changed tests verify real behavior, not mocks?
-    - Are the task's edge cases covered?
-
-    **Structure:**
-    - Does each file have one clear responsibility with a well-defined interface?
-    - Are units decomposed so they can be understood and tested independently?
-    - Is the implementation following the file structure from the plan?
-    - Did this change create new files that are already large, or
-      significantly grow existing files? (Don't flag pre-existing file
-      sizes — focus on what this change contributed.)
-
-    Your report should point at evidence: file:line references for every
-    finding and for any check you would otherwise answer with a bare
-    "yes." A tight report that cites lines gives the controller everything
-    it needs.
-
-    Your final message is the report itself: begin directly with the
-    spec-compliance verdict. Every line is a verdict, a finding with
-    file:line, or a check you ran — no preamble, no process narration,
-    no closing summary.
-
-    ## Calibration
-
-    Categorize issues by actual severity. Not everything is Critical.
-    Important means this task cannot be trusted until it is fixed: incorrect
-    or fragile behavior, a missed requirement, or maintainability damage you
-    would block a merge over — verbatim duplication of a logic block,
-    swallowed errors, tests that assert nothing. "Coverage could be broader"
-    and polish suggestions are Minor.
-    If the plan or brief explicitly mandates something this rubric calls a
-    defect (a test that asserts nothing, verbatim duplication of a logic
-    block), that IS a finding — report it as Important, labeled
-    plan-mandated. The plan's authorship does not grade its own work; the
-    human decides.
-    Acknowledge what was done well before listing issues — accurate praise
-    helps the implementer trust the rest of the feedback.
+    For the canonical Standards axis, use the repo's documented standards plus
+    the smell baseline from `~/.agents/skills/code-review/SKILL.md`. The
+    canonical skill is the single source of truth for that baseline.
 
     ## Output Format
 
-    ### Spec Compliance
+    Begin directly with the report.
 
-    - ✅ Spec compliant | ❌ Issues found: [what's missing/extra/misunderstood,
-      with file:line references]
-    - ⚠️ Cannot verify from diff: [requirements you could not verify from the
-      diff alone, and what the controller should check — report alongside the
-      ✅/❌ verdict for everything you could verify]
+    ### Spec
+    - ✅ Pass | ❌ Issues found | ⚠️ Cannot verify from diff
+    - Findings from the canonical Spec axis, with file:line evidence and quoted
+      task-brief/global-constraint text where relevant.
+
+    ### Standards
+    - ✅ Pass | ❌ Issues found
+    - Findings from the canonical Standards axis, with file:line evidence and
+      the cited documented standard or named baseline smell.
 
     ### Strengths
-    [What's well done? Be specific.]
+    Specific praise for code that is genuinely well-built.
 
-    ### Issues
+    ### Task Gate
+    **Task quality:** Approved | Needs fixes
 
-    #### Critical (Must Fix)
-    #### Important (Should Fix)
-    #### Minor (Nice to Have)
-
-    For each issue: file:line, what's wrong, why it matters, how to fix
-    (if not obvious).
-
-    ### Assessment
-
-    **Task quality:** [Approved | Needs fixes]
-
-    **Reasoning:** [1-2 sentence technical assessment]
+    **Reasoning:** One or two sentences. Approve only when Spec passes and the
+    Standards axis has no finding you would block this task over. Blocking
+    findings go back to the implementer; non-blocking findings can be recorded
+    in the ledger for final review.
 ```
 
 **Placeholders:**
 - `[MODEL]` — REQUIRED: reviewer model per SKILL.md Model Selection
-- `[BRIEF_FILE]` — REQUIRED: the task brief file (`scripts/task-brief PLAN N`
-  prints the path; same file the implementer worked from)
-- `[GLOBAL_CONSTRAINTS]` — the binding requirements copied verbatim from
-  the plan's Global Constraints section or the spec: exact values, formats,
-  and stated relationships between components (not process rules — those
-  are already in this template)
-- `[REPORT_FILE]` — REQUIRED: the file the implementer wrote its detailed
-  report to
+- `[BRIEF_FILE]` — REQUIRED: the task brief file (`scripts/task-brief PLAN N` prints the path; same file the implementer worked from)
+- `[GLOBAL_CONSTRAINTS]` — binding requirements copied verbatim from the plan's Global Constraints section or the spec: exact values, formats, and stated relationships between components
+- `[REPORT_FILE]` — REQUIRED: the file the implementer wrote its detailed report to
 - `[BASE_SHA]` — commit before this task
 - `[HEAD_SHA]` — current commit
-- `[DIFF_FILE]` — REQUIRED: the path the controller wrote the review
-  package to (`scripts/review-package BASE HEAD` prints the unique path it
-  wrote; the package never enters the controller's context)
+- `[DIFF_FILE]` — REQUIRED: the path the controller wrote the review package to (`scripts/review-package BASE HEAD` prints the unique path it wrote; the package never enters the controller's context)
 
-**Reviewer returns:** Spec Compliance verdict (✅/❌/⚠️), Strengths, Issues
-(Critical/Important/Minor), Task quality verdict
+**Reviewer returns:** Spec axis verdict, Standards axis verdict, Strengths, and Task quality verdict.
 
-A fix dispatch can address spec gaps and quality findings together;
-re-review after fixes covers both verdicts.
+A fix dispatch can address spec gaps and standards findings together; re-review after fixes covers both axes.
