@@ -21,7 +21,7 @@ Confirm the `subagent-driven-development` skill is actually installed (look for 
 Read the repo's starting state; don't assume:
 
 - `git remote -v`, current branch — is there a remote? Is `main`/`master` the working branch?
-- `CLAUDE.md` and `AGENTS.md` at the repo root — does either exist? Is there already an `## Agent skills` section, and does it already mention execution / SDD?
+- `CLAUDE.md` and `AGENTS.md` at the repo root — does either exist? Does `CLAUDE.md` delegate to or reference `AGENTS.md`? Is there already an `## Agent skills` section, and does it already mention execution / SDD?
 - `.scratch/` — are there issue dirs (`<feature>/issues/`, or a ticket-prefixed variant like `<TICKET>-<slug>/issues/`)? Sign that an issue-tracker convention is already in use and issues can be the task source.
 - `docs/agents/` — does prior setup output exist (`issue-tracker.md`, etc.)?
 - `CONTEXT.md` and `docs/adr/` — present? Reviewers and implementers will read them if so (optional, not required).
@@ -44,13 +44,14 @@ Don't ask about the workspace, branching, or domain docs — those need no decis
 
 Show the user a draft of the `## Agent skills` block addition and the `docs/agents/execution.md` contents. Let them edit before writing.
 
-**Pick the file to edit** (same rule the suite uses):
+**Pick the file to edit** (use the active repo instructions file; don't always write `CLAUDE.md`):
 
-- If `CLAUDE.md` exists, edit it.
+- If `CLAUDE.md` exists and references `AGENTS.md`, edit the referenced `AGENTS.md`. If the referenced file is missing, ask before creating it and mention that `CLAUDE.md` already points there.
+- Else if `CLAUDE.md` exists and does not reference `AGENTS.md`, edit it.
 - Else if `AGENTS.md` exists, edit it.
 - If neither exists, ask the user which to create — don't pick for them.
 
-Never create `AGENTS.md` when `CLAUDE.md` exists (or vice versa). If an `## Agent skills` block already exists, add or update the `### Executing work` subsection in place; leave the other subsections untouched.
+Only edit `CLAUDE.md` directly when it does not delegate SDD-relevant instructions to `AGENTS.md`. Never edit both files for the same setup. If an `## Agent skills` block already exists, add or update the `### Executing work` subsection in place; leave the other subsections untouched.
 
 **The subsection to add** (fill the bracketed parts from the task-source answer):
 
@@ -70,4 +71,4 @@ Then write `docs/agents/execution.md` from the seed in this skill folder ([execu
 
 ### 4. Done
 
-Tell the user setup is complete: in this repo, "execute the plan / these issues" will now route to `subagent-driven-development`, and agents reading `CLAUDE.md`/`AGENTS.md` will know it's the execution path. They can edit `docs/agents/execution.md` directly later; re-run this skill only to change the task source or restart.
+Tell the user setup is complete: in this repo, "execute the plan / these issues" will now route to `subagent-driven-development`, and agents reading the edited instructions file (`CLAUDE.md` or `AGENTS.md`) will know it's the execution path. They can edit `docs/agents/execution.md` directly later; re-run this skill only to change the task source or restart.
