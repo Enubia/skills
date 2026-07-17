@@ -57,10 +57,18 @@ digraph when_to_use {
 
 ## Workspace & isolation
 
-Before Task 1:
+Establish the run workspace before Task 1:
 
-- **Never start implementation on `main`/`master` without explicit user consent.** Work on a feature branch or, for isolation from your current workspace, a git worktree (`git worktree add` or the `EnterWorktree` tool).
-- SDD's transient artifacts (implementer reports, review packages, the progress ledger; task briefs for the plan-file fallback) live under `.scratch/sdd/`, resolved by `scripts/sdd-workspace`. It self-ignores so these never pollute `git status` or get committed — the issue files themselves stay tracked.
+1. Record the branch active when SDD was invoked as `BASE_BRANCH` and its exact `HEAD` as `BASE_COMMIT`. Capture this fixed point before any fetch, pull, or rebase; it remains authoritative for the run.
+2. Read the repo's SDD instructions (`AGENTS.md`, `CLAUDE.md`, or `docs/agents/execution.md`) for its configured workspace mode. If no mode is recorded, ask the user to choose **feature branch** or **worktree** before implementation.
+3. Derive a descriptive, unused `WORK_BRANCH` from the requested work and create it at `BASE_COMMIT`:
+   - **Feature branch:** create and check out `WORK_BRANCH` in the current worktree with `git switch -c WORK_BRANCH BASE_COMMIT`.
+   - **Worktree:** create a separate worktree with `WORK_BRANCH` checked out at `BASE_COMMIT` using `git worktree add -b WORK_BRANCH PATH BASE_COMMIT` (or the environment's worktree tool), then run every remaining step from that worktree.
+4. Verify that `WORK_BRANCH` is checked out and `git merge-base BASE_COMMIT HEAD` resolves to `BASE_COMMIT`. Implementation starts only after both checks pass.
+
+Every SDD run gets a new work branch from the branch active at invocation, even when that branch is already a feature branch. Use the recorded `BASE_BRANCH` and `BASE_COMMIT` exclusively for review and integration.
+
+SDD's transient artifacts (implementer reports, review packages, the progress ledger; task briefs for the plan-file fallback) live under `.scratch/sdd/`, resolved by `scripts/sdd-workspace`. It self-ignores so these never pollute `git status` or get committed — the issue files themselves stay tracked.
 
 ## The Process
 
@@ -80,12 +88,14 @@ digraph process {
         "Mark task complete in todo list and progress ledger" [shape=box];
     }
 
+    "Record active branch/HEAD; create and check out run branch using configured mode" [shape=box];
     "Read plan/issues, note context and global constraints, create todos" [shape=box];
     "More tasks remain?" [shape=diamond];
     "Dispatch final whole-branch reviewer (./code-reviewer.md adapter to code-review)" [shape=box];
     "Offer quality-review for the maintainability pass" [shape=box];
     "Finish the branch (see Finishing)" [shape=box style=filled fillcolor=lightgreen];
 
+    "Record active branch/HEAD; create and check out run branch using configured mode" -> "Read plan/issues, note context and global constraints, create todos";
     "Read plan/issues, note context and global constraints, create todos" -> "Dispatch implementer subagent (./implementer-prompt.md)";
     "Dispatch implementer subagent (./implementer-prompt.md)" -> "Implementer subagent asks questions?";
     "Implementer subagent asks questions?" -> "Answer questions, provide context" [label="yes"];
@@ -178,7 +188,7 @@ Per-task reviews are task-scoped gates. The broad review happens once, at the fi
 - A dispatch prompt describes one task, not the session's history. Do not paste accumulated prior-task summaries ("state after Tasks 1-3") into later dispatches — a real session's dispatch hit 42k chars of which 99% was pasted history. A fresh subagent needs its task, the interfaces it touches, and the global constraints. Nothing else.
 - Dispatch fix subagents for task-gate blockers: Spec failures and Standards findings the reviewer says should block the task. Record non-blocking findings in the progress ledger as you go, and point the final whole-branch review at that list so it can triage which must be fixed before merge. A roll-up nobody reads is a silent discard.
 - A finding labeled plan-mandated — or any finding that conflicts with what the plan's text requires — is the human's decision, like any plan contradiction: present the finding and the plan text, ask which governs. Do not dismiss the finding because the plan mandates it, and do not dispatch a fix that contradicts the plan without asking.
-- The final whole-branch review gets a package too: run `scripts/review-package MERGE_BASE HEAD` (MERGE_BASE = the commit the branch started from, e.g. `git merge-base main HEAD`) and include the printed path in the final review dispatch, so the final reviewer reads one file instead of re-deriving the branch diff with git commands.
+- The final whole-branch review gets a package too: run `scripts/review-package BASE_COMMIT HEAD` with the exact fixed point recorded at invocation and include the printed path in the final review dispatch, so the final reviewer reads one file instead of re-deriving the branch diff with git commands.
 - Every fix dispatch carries the implementer contract: the fix subagent re-runs the tests covering its change and reports the results. Name the covering test files in the dispatch — a one-line fix does not need the whole suite. Before re-dispatching the reviewer, confirm the fix report contains the covering tests, the command run, and the output; dispatch the re-review once all three are present.
 - If the final whole-branch review returns findings, dispatch ONE fix subagent with the complete findings list — not one fixer per finding. Per-finding fixers each rebuild context and re-run suites; a real session's final-review fix wave cost more than all its tasks combined.
 
@@ -195,7 +205,7 @@ Everything you paste into a dispatch prompt — and everything a subagent prints
 
 Conversation memory does not survive compaction. In real sessions, controllers that lost their place have re-dispatched entire completed task sequences — the single most expensive failure observed. Track progress in a ledger file, not only in todos.
 
-- At skill start, check for a ledger: `cat "$(git rev-parse --show-toplevel)/.scratch/sdd/progress.md"`. Tasks listed there as complete are DONE — do not re-dispatch them; resume at the first task not marked complete.
+- After creating the run workspace, initialize the ledger with `BASE_BRANCH`, `BASE_COMMIT`, `WORK_BRANCH`, and workspace mode. Check an existing ledger only when resuming that same recorded run; tasks listed there as complete are DONE — do not re-dispatch them. A ledger whose branch identity differs belongs to another run and must not control this one.
 - When a task's review comes back clean, append one line to the ledger in the same message as your other bookkeeping: `Task N (<issue-slug>): complete (commits <base7>..<head7>, review clean)`.
 - The ledger is your recovery map: the commits it names exist in git even when your context no longer remembers creating them. After compaction, trust the ledger and `git log` over your own recollection.
 - For a long run that is about to compact, use the `handoff` skill to capture controller state (which tasks are done, the branch, the ledger path) for the next session.
@@ -206,7 +216,7 @@ Conversation memory does not survive compaction. In real sessions, controllers t
 After the final whole-branch review comes back clean (and any final-review fixes are merged):
 
 1. **Maintainability pass (offer):** the whole-branch reviewer runs the canonical `code-review` Standards/Spec axes; it does not do the strict structural audit. Offer to run the user-invoked **`quality-review`** skill on the branch for the maintainability/code-judo pass. It produces a shareable HTML report and is the right final gate before merge on non-trivial branches.
-2. **Integrate:** present the integration options — merge to the base branch, open a PR, or leave the branch for the user. Follow the repo's commit/PR conventions. Do not merge or push without the user's go-ahead.
+2. **Integrate:** present the integration options — merge `WORK_BRANCH` into the recorded `BASE_BRANCH`, open a PR targeting `BASE_BRANCH`, or leave the work branch for the user. Follow the repo's commit/PR conventions. Do not merge or push without the user's go-ahead.
 3. **Tracker:** update the executed issues' `Status:` line if the project's `triage` flow expects it, and record the final ledger line.
 
 ## Prompt Templates
@@ -279,7 +289,6 @@ Done!
 ## Red Flags
 
 **Never:**
-- Start implementation on main/master branch without explicit user consent
 - Skip task review, or accept a report missing either axis (Spec AND Standards are both required)
 - Proceed with unfixed issues
 - Dispatch multiple implementation subagents in parallel (conflicts)

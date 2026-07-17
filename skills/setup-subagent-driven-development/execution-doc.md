@@ -17,15 +17,33 @@ into tasks first, then hand the tasks to SDD.
   task's brief with its bundled `scripts/task-brief PLAN_FILE N`.
 - **Either.** Both shapes work; use whichever a given piece of work produced.
 
+## Branch isolation
+
+<!-- setup keeps ONE workspace mode -->
+
+- **Feature branch.** At invocation, record the active branch and its exact
+  `HEAD`, then create and check out a new work branch from that commit in the
+  current worktree.
+- **Worktree.** At invocation, record the active branch and its exact `HEAD`,
+  then create a new work branch from that commit in a separate worktree. Leave
+  the original checkout on the base branch.
+
+The branch active when SDD is invoked is always the base, even when it is itself
+a feature branch. Capture it before repository updates. Use the recorded base
+commit for the final diff and the recorded base branch as the merge or PR
+target.
+
 ## How a run goes
 
-1. Work on a feature branch or worktree — never `main`/`master` without consent.
+1. Establish the configured workspace and verify that the new work branch is
+   checked out from the recorded base commit.
 2. Per task: dispatch a fresh implementer subagent (builds test-first via the
    `tdd` skill) → generate a diff package → dispatch a task reviewer (spec
    compliance + code quality) → loop fixes until clean → record the task in the
    progress ledger.
-3. After all tasks: one whole-branch correctness/spec review, then finish
-   (offer the maintainability pass, then merge/PR per repo conventions).
+3. After all tasks: one whole-branch correctness/spec review against the
+   recorded base commit, then finish (offer the maintainability pass, then
+   merge/PR to the recorded base branch per repo conventions).
 
 ## Workspace
 

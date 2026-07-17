@@ -1,12 +1,12 @@
 ---
 name: setup-subagent-driven-development
-description: Configure one repo to use the subagent-driven-development skill — document the execution step in CLAUDE.md/AGENTS.md and record where tasks come from. Run once per repo; works standalone, without the rest of the engineering skills.
+description: Configure one repo to use the subagent-driven-development skill — document the execution step in CLAUDE.md/AGENTS.md, record where tasks come from, and choose feature-branch or worktree isolation. Run once per repo; works standalone, without the rest of the engineering skills.
 disable-model-invocation: true
 ---
 
 # Setup Subagent-Driven Development
 
-Make a repo `subagent-driven-development`-aware: record, where agents will look for it, that SDD is this repo's in-session execution path, and where its task briefs come from. SDD itself needs almost no per-repo state — its `.scratch/sdd/` workspace self-creates and self-ignores on first run — so this setup is mostly **documentation** plus confirming the one real variable: the task source.
+Make a repo `subagent-driven-development`-aware: record, where agents will look for it, that SDD is this repo's in-session execution path, where its task briefs come from, and whether each run uses a feature branch in the current worktree or a separate worktree. Every run creates a new work branch from the branch active when SDD is invoked.
 
 This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write. Be idempotent: update an existing block in place, never append a duplicate.
 
@@ -20,15 +20,15 @@ Confirm the `subagent-driven-development` skill is actually installed (look for 
 
 Read the repo's starting state; don't assume:
 
-- `git remote -v`, current branch — is there a remote? Is `main`/`master` the working branch?
+- `git remote -v`, current branch, `git worktree list` — is there a remote, and does the repo already use worktrees?
 - `CLAUDE.md` and `AGENTS.md` at the repo root — does either exist? Does `CLAUDE.md` delegate to or reference `AGENTS.md`? Is there already an `## Agent skills` section, and does it already mention execution / SDD?
 - `.scratch/` — are there issue dirs (`<feature>/issues/`, or a ticket-prefixed variant like `<TICKET>-<slug>/issues/`)? Sign that an issue-tracker convention is already in use and issues can be the task source.
-- `docs/agents/` — does prior setup output exist (`issue-tracker.md`, etc.)?
+- `docs/agents/` — does prior setup output exist (`issue-tracker.md`, `execution.md`, etc.)? Does it already record a task source or workspace mode?
 - `CONTEXT.md` and `docs/adr/` — present? Reviewers and implementers will read them if so (optional, not required).
 
 ### 2. Present findings and ask
 
-Summarise what's present and what's missing in two or three lines. Then ask **one** real question — the task source — with your detected default. Assume the user may not know the terms; lead with a one-line explainer.
+Summarise what's present and what's missing in two or three lines. Then ask one batched question with two decisions, each with a detected default. Assume the user may not know the terms; lead each decision with a one-line explainer.
 
 **Task source.**
 
@@ -38,11 +38,18 @@ Summarise what's present and what's missing in two or three lines. Then ask **on
 - **A plan file** — one document with `## Task N` headings; SDD extracts each task with its `scripts/task-brief`. Default this if there's no issue convention.
 - **Both** — accept either. Safe default when unsure.
 
-Don't ask about the workspace, branching, or domain docs — those need no decision. If `CONTEXT.md`/ADRs exist, just note in the doc that reviewers should read them.
+**Workspace mode.**
+
+> Explainer: every SDD run records the branch active at invocation, then creates a fresh work branch from that exact commit. The workspace mode decides where that new branch is checked out.
+
+- **Feature branch** — create and check out the new branch in the current worktree. Default this unless the repo already uses worktrees or its instructions favor them.
+- **Worktree** — create the new branch in a separate worktree, leaving the current checkout on the base branch. Default this when existing instructions, tooling, or `git worktree list` show that convention.
+
+Always ask; the detected default is a recommendation, not an inferred answer. Treat the branch active when SDD is invoked as the fixed base, so setup needs no branch-base choice. If `CONTEXT.md`/ADRs exist, just note in the doc that reviewers should read them.
 
 ### 3. Confirm and write
 
-Show the user a draft of the `## Agent skills` block addition and the `docs/agents/execution.md` contents. Let them edit before writing.
+Show the user a draft of the `## Agent skills` block addition and the `docs/agents/execution.md` contents, including the selected task source and workspace mode. Let them edit before writing.
 
 **Pick the file to edit** (use the active repo instructions file; don't always write `CLAUDE.md`):
 
@@ -63,12 +70,14 @@ Once tasks are ready, execute them in-session with the
 (building test-first via `tdd`), a spec+quality review after each, then a
 whole-branch review before merge. Task source: [issue files under
 `.scratch/<feature>/issues/` | a plan file with `## Task N` headings | either].
+Workspace mode: [feature branch in the current worktree | separate worktree].
+Every run creates a new work branch from the branch active at invocation.
 SDD's transient run artifacts live in self-ignored `.scratch/sdd/` — never
 committed. See `docs/agents/execution.md`.
 ```
 
-Then write `docs/agents/execution.md` from the seed in this skill folder ([execution-doc.md](execution-doc.md)), filling the task-source and noting whether `CONTEXT.md`/ADRs are present for reviewers to read.
+Then write `docs/agents/execution.md` from the seed in this skill folder ([execution-doc.md](execution-doc.md)), filling the task source and workspace mode and noting whether `CONTEXT.md`/ADRs are present for reviewers to read.
 
 ### 4. Done
 
-Tell the user setup is complete: in this repo, "execute the plan / these issues" will now route to `subagent-driven-development`, and agents reading the edited instructions file (`CLAUDE.md` or `AGENTS.md`) will know it's the execution path. They can edit `docs/agents/execution.md` directly later; re-run this skill only to change the task source or restart.
+Tell the user setup is complete: in this repo, "execute the plan / these issues" will now route to `subagent-driven-development`, and agents reading the edited instructions file (`CLAUDE.md` or `AGENTS.md`) will know the task source and workspace mode. They can edit `docs/agents/execution.md` directly later; re-run this skill to change either choice.

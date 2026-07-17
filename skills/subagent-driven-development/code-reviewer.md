@@ -25,7 +25,7 @@ Subagent (general-purpose):
     What was implemented:
     [DESCRIPTION]
 
-    Fixed point: [BASE_SHA] (the branch's merge-base)
+    Fixed point: [BASE_SHA] (the exact base commit recorded when SDD was invoked)
     Head: [HEAD_SHA]
     Diff package: [DIFF_FILE]
 
@@ -91,8 +91,8 @@ Subagent (general-purpose):
 - `[MODEL]` — REQUIRED: most capable tier per SKILL.md Model Selection
 - `[DESCRIPTION]` — brief summary of what was built
 - `[PLAN_OR_REQUIREMENTS]` — what it should do: plan file path, issue directory, task list, or requirements text
-- `[BASE_SHA]` — the branch's merge-base, e.g. `git merge-base main HEAD`
+- `[BASE_SHA]` — the exact `BASE_COMMIT` recorded from the active branch at invocation
 - `[HEAD_SHA]` — ending commit
-- `[DIFF_FILE]` — REQUIRED: path from `scripts/review-package MERGE_BASE HEAD` (prints the unique path it wrote; never enters the controller's context)
+- `[DIFF_FILE]` — REQUIRED: path from `scripts/review-package BASE_COMMIT HEAD` (prints the unique path it wrote; never enters the controller's context)
 
 **Reviewer returns:** Standards axis, Spec axis, Strengths, and Branch Assessment.
